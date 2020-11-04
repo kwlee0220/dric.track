@@ -128,7 +128,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-.vscode/
+.vscode/*
 .metals/
 data/*.mp4
 weights/yolov3.tf*
