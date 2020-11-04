@@ -147,6 +147,7 @@ class Track:
 
         self.hits += 1
         self.time_since_update = 0
+        self.class_name = detection.class_name
         self.detector_confidence = detection.confidence
         if self.state == TrackState.Tentative and self.hits >= self._n_init:
             self.state = TrackState.Confirmed

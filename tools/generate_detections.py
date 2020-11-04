@@ -81,6 +81,7 @@ class ImageEncoder(object):
             graph_def.ParseFromString(file_handle.read())
         tf.import_graph_def(graph_def, name="net")
 
+        physical_devices = tf.config.experimental.list_physical_devices('GPU')
         if len(physical_devices) > 0:
             self.input_var = tf.get_default_graph().get_tensor_by_name("%s:0" % input_name)
             self.output_var = tf.get_default_graph().get_tensor_by_name("%s:0" % output_name)
