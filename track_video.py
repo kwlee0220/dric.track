@@ -12,7 +12,7 @@ tracker = DeepSortTracker(detector, max_age=10, n_init=5)
 tracker = BufferedTracker(tracker, buffer_size=5)
 
 times = []
-vid = cv2.VideoCapture('./data/cam_11.mp4')
+vid = cv2.VideoCapture('./data/cam_6.mp4')
 while True:
     _, img = vid.read()
 
@@ -22,7 +22,7 @@ while True:
 
     if tracks is not None and tracked_img is not None:
         confirmeds =  [t for t in tracks if t.detector_confidence > 0 and not t.tentative]
-        tracked_img = draw_boxes(tracked_img, [t.tlbr for t in confirmeds], thickness=1)
+        tracked_img = draw_boxes(tracked_img, [t.tlbr for t in confirmeds], thickness=2)
         tracked_img = draw_track_labels(tracked_img, confirmeds, thickness=1)
 
         tentatives = [t for t in tracks if t.detector_confidence == 0 or t.tentative]
