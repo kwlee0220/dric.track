@@ -47,6 +47,8 @@ class Track:
     def __setattr__(self, attr, value):
         if attr == 'tentative':
             self.__dict__['tentative'] = value
+        elif attr == 'label':
+            self.__dict__['label'] = value
         else:
             raise AttributeError(attr + ' not allowed')
 
@@ -55,21 +57,43 @@ class Track:
         return '%s(%d):%.3f%s' % (self.__dict__['label'], self.__dict__['id'],
                                     self.__dict__['detector_confidence'], tent)
 
-class BufferedTracker:
-    def __init__(self, tracker, buffer_size=10):
+
+from abc import ABCMeta, abstractmethod
+import logging
+class ObjectTracker(metaclass=ABCMeta):
+    logger = logging.getLogger("dric.track.tracker")
+    logger.setLevel(logging.INFO)
+
+    @abstractmethod
+    def track(self, image=None): pass
+
+    def track_detections(self, detections):
+        raise AttributeError("method 'track_detections()'")
+
+class BufferedTracker(ObjectTracker):
+    def __init__(self, detector, tracker, image_cache_size=4, buffer_size=10):
+        self.detector = detector
         self.tracker = tracker
+        self.image_cache = []
         self.buffer = []
+        self.image_cache_size = image_cache_size
         self.buffer_size = buffer_size
 
     def track(self, image=None):
-        tracks = self.tracker.track(image)
+        if image is not None:
+            self.image_cache.append(image)
+        if len(self.image_cache) >= self.image_cache_size:
+            dets_list = self.detector.detect_from_images(self.image_cache)
+            tracks_list = [self.tracker.track_detections(dets) for dets in dets_list]
+            for img, tracks in zip(self.image_cache, tracks_list):
+                confirmed_keys = [t.id for t in tracks if not t.tentative]
+                for _, buffered_tracks in self.buffer:
+                    for t in buffered_tracks:
+                        if t.tentative and t.id in confirmed_keys:
+                            t.tentative = False
+                self.buffer.append((img, tracks))
+            self.image_cache.clear()
 
-        keys = [t.id for t in tracks if not t.tentative]
-        for _, ts in self.buffer:
-            for t in ts:
-                if t.tentative and t.id in keys:
-                    t.tentative = False
-        self.buffer.append((image, tracks))
         if len(self.buffer) >= self.buffer_size:
             head = self.buffer[0]
             self.buffer = self.buffer[1:]
@@ -77,41 +101,24 @@ class BufferedTracker:
         else:
             return (None, list())
 
-"""
-        if len(self.buffer) >= self.buffer_size or image is None:
-            for i in range(len(self.buffer)-1, 0, -1):
-                keys = [t.id for t in self.buffer[i][1] if not t.tentative]
-                for j in range(i):
-                    print(i, j)
-                    for t in self.buffer[j][1]:
-                        if t.tentative and t.id in keys:
-                            t.tentative = False
-            head = self.buffer[0]
-            self.buffer = self.buffer[1:]
-            return head
-        else:
-            return (None, list())
-"""
-
-class DeepSortTracker:
-    def __init__(self, detector, n_init=3, max_age=30):
+class DeepSortTracker(ObjectTracker):
+    def __init__(self, detector, n_init=3, max_age=30, max_cosine_distance=0.5):
         self.detector = detector
 
-        max_cosine_distance = 0.5
         nn_budget = None
         self.nms_max_overlap = 0.8
-
         metric = nn_matching.NearestNeighborDistanceMetric('cosine', max_cosine_distance, nn_budget)
         self.tracker = Tracker(metric, n_init=n_init, max_age=max_age)
     
     def track(self, image=None):
-        detections = self.detector.detect(image) if image is not None else []
+        detections = self.detector.detect(image)
+        return self.track_detections(detections)
 
-        boxes = [d.tlwh for d in detections]                                    
-        boxs = np.array(boxes)
+    def track_detections(self, detections):      
+        boxes = np.array([d.tlwh for d in detections])
         scores = np.array([d.confidence for d in detections])
         classes = np.array([d.class_name for d in detections])
-        indices = preprocessing.non_max_suppression(boxs, classes, self.nms_max_overlap, scores)
+        indices = preprocessing.non_max_suppression(boxes, classes, self.nms_max_overlap, scores)
         detections = [detections[i] for i in indices]
 
         self.tracker.predict()
