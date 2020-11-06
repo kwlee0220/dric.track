@@ -53,3 +53,7 @@ class Detection(object):
         ret[:2] += ret[2:] / 2
         ret[2] /= ret[3]
         return ret
+
+    def __repr__(self):
+        return '%s(%.2f):(%d,%d),%dx%d' % (self.class_name, self.confidence,
+                                            self.tlwh[0], self.tlwh[1], self.tlwh[2], self.tlwh[3])

@@ -65,13 +65,39 @@ class ObjectTracker(metaclass=ABCMeta):
     logger.setLevel(logging.INFO)
 
     @abstractmethod
-    def track(self, image=None): pass
+    def track(self, image): pass
 
-    def track_detections(self, detections):
-        raise AttributeError("method 'track_detections()'")
+class LookAheadTracker(ObjectTracker):
+    def __init__(self, tracker, count=10):
+        self.tracker = tracker
+        self.buffer = []
+        self.count = count
+
+    def track_detections(self, image, detections):
+        _, tracks = self.tracker.track_detections(detections)
+        return self.__handle_tracks(image, tracks)
+
+    def track(self, image=None):
+        _, tracks = self.tracker.track(image)
+        return self.__handle_tracks(image, tracks)
+
+    def __handle_tracks(self, image, tracks):
+        confirmed_keys = [t.id for t in tracks if not t.tentative]
+        for _, buffered_tracks in self.buffer:
+            for t in buffered_tracks:
+                if t.tentative and t.id in confirmed_keys:
+                    t.tentative = False
+        self.buffer.append((image, tracks))
+
+        if len(self.buffer) >= self.count:
+            head = self.buffer[0]
+            self.buffer = self.buffer[1:]
+            return head
+        else:
+            return (None, list())
 
 class BufferedTracker(ObjectTracker):
-    def __init__(self, detector, tracker, image_cache_size=4, buffer_size=10):
+    def __init__(self, detector, tracker, image_cache_size=1, buffer_size=10):
         self.detector = detector
         self.tracker = tracker
         self.image_cache = []
@@ -110,9 +136,9 @@ class DeepSortTracker(ObjectTracker):
         metric = nn_matching.NearestNeighborDistanceMetric('cosine', max_cosine_distance, nn_budget)
         self.tracker = Tracker(metric, n_init=n_init, max_age=max_age)
     
-    def track(self, image=None):
+    def track(self, image):
         detections = self.detector.detect(image)
-        return self.track_detections(detections)
+        return self.track_detections(image, detections)
 
     def track_detections(self, detections):      
         boxes = np.array([d.tlwh for d in detections])

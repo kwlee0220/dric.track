@@ -32,7 +32,7 @@ class FilteringDetector(ObjectDetector):
         return [self.__filter_detections(detections) for detections in self.detector.detect_from_images(images)]
         
     def detect(self, image):
-        self.__filter_detections(self.detector.detect(image))
+        return self.__filter_detections(self.detector.detect(image))
 
     def __filter_detections(self, detections):
         return [det for det in detections if det.class_name in self.class_names]
